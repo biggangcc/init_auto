@@ -1,0 +1,60 @@
+---
+- name: Setup and Register Initia Validator Node
+  hosts: all
+  become: true
+  vars_prompt:
+    - name: moniker
+      prompt: "Enter the moniker for the validator"
+      private: no
+
+    - name: details
+      prompt: "Enter details for the validator"
+      private: no
+
+    - name: website
+      prompt: "Enter the website for the validator"
+      private: no
+
+  tasks:
+    - name: Retrieve PUBLIC_KEY for validator
+      shell: initiad tendermint show-validator
+      register: public_key
+      changed_when: false
+
+    - name: Register the validator node
+      shell: |
+        initiad tx mstaking create-validator \
+        --amount 1000000uinit \
+        --from wallet \
+        --commission-rate 0.05 \
+        --commission-max-rate 0.10 \
+        --commission-max-change-rate 0.01 \
+        --pubkey '{{ public_key.stdout }}' \
+        --moniker "{{ moniker }}" \
+        --identity "" \
+        --website "{{ website }}" \
+        --details "{{ details }}" \
+        --chain-id initiation-1 \
+        --gas=2000000 --fees=300000uinit \
+        --node https://rpc-initia-testnet.trusted-point.com \
+        --yes --keyring-backend test
+      register: validator_registration
+      failed_when: "'failed' in validator_registration.stderr"
+      changed_when: true
+
+    - name: Display validator registration output
+      debug:
+        msg: "{{ validator_registration.stdout }}"
+
+    - name: Display validator registration stderr
+      debug:
+        msg: "{{ validator_registration.stderr }}"
+
+    - name: Get the validator address
+      shell: initiad keys show wallet -a --bech val --keyring-backend test
+      register: validator_address
+      changed_when: false
+
+    - name: Display the validator address
+      debug:
+        msg: "The validator address is: {{ validator_address.stdout }}"

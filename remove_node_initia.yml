@@ -1,0 +1,68 @@
+---
+- name: Remove Initia Node and Clean Up
+  hosts: all
+  become: true
+  tasks:
+    - name: Stop Initia Service
+      systemd:
+        name: initia-node.service
+        state: stopped
+      ignore_errors: yes
+
+    - name: Disable Initia Service
+      systemd:
+        name: initia-node.service
+        enabled: no
+      ignore_errors: yes
+
+    - name: Remove Initia Service File
+      file:
+        path: /etc/systemd/system/initia-node.service
+        state: absent
+      ignore_errors: yes
+
+    - name: Reload Systemd Daemon
+      command: systemctl daemon-reload
+      ignore_errors: yes
+
+    - name: Remove Initia Data Directory
+      file:
+        path: "{{ ansible_env.HOME }}/.initia"
+        state: absent
+      ignore_errors: yes
+
+    - name: Remove Initia Installation Directory
+      file:
+        path: "{{ ansible_env.HOME }}/initia"
+        state: absent
+      ignore_errors: yes
+
+    - name: Remove Cosmovisor Binary
+      file:
+        path: /root/go/bin/cosmovisor
+        state: absent
+      ignore_errors: yes
+
+    - name: Remove Initia Binary
+      file:
+        path: /usr/local/bin/initiad
+        state: absent
+      ignore_errors: yes
+
+    - name: Clean Go mod cache
+      shell: go clean -modcache
+      args:
+        executable: /bin/bash
+      ignore_errors: yes
+
+    - name: Remove Go Workspace
+      file:
+        path: "{{ ansible_env.HOME }}/go"
+        state: absent
+      ignore_errors: yes
+
+    - name: Remove Addrbook File (if any)
+      file:
+        path: "{{ ansible_env.HOME }}/.initia/config/addrbook.json"
+        state: absent
+      ignore_errors: yes

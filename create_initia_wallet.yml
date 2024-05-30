@@ -1,0 +1,29 @@
+---
+- name: Create and Link Initia Wallet
+  hosts: all
+  become: true
+  tasks:
+    - name: Ensure initia directory exists
+      file:
+        path: /root/initia
+        state: directory
+
+    - name: Create Initia wallet
+      command: initiad keys add wallet --output json --keyring-backend test
+      register: wallet_output
+      changed_when: false
+
+    - name: Save wallet output JSON to file
+      copy:
+        content: "{{ wallet_output.stdout }}"
+        dest: /root/initia/wallet.json
+      when: wallet_output.stdout != ""
+
+    - name: Get Initia wallet address from JSON
+      shell: jq -r '.address' /root/initia/wallet.json
+      register: wallet_address
+      changed_when: false
+
+    - name: Display Initia wallet address
+      debug:
+        msg: "The Initia wallet address is: {{ wallet_address.stdout }}"

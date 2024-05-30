@@ -1,0 +1,76 @@
+---
+- name: Setup Oracle for Initia
+  hosts: all
+  become: true
+  tasks:
+    - name: Clone Slinky Repository
+      git:
+        repo: "https://github.com/skip-mev/slinky.git"
+        dest: "~/slinky"
+        version: "v0.4.3"
+        force: yes
+
+    - name: Build Slinky
+      shell: make build
+      args:
+        chdir: "~/slinky"
+
+    - name: Configure Oracle and Market Components
+      copy:
+        dest: "~/slinky/config/core/oracle.json"
+        content: |
+          {
+            "components": [
+              {
+                "name": "marketmap_api",
+                "api": {
+                  "enabled": true,
+                  "timeout": 20000000000,
+                  "interval": 10000000000,
+                  "reconnectTimeout": 2000000000,
+                  "maxQueries": 1,
+                  "atomic": true,
+                  "url": "0.0.0.0:9090",
+                  "endpoints": null,
+                  "batchSize": 0,
+                  "name": "marketmap_api"
+                },
+                "type": "market_map_provider"
+              }
+            ],
+            "metrics": {
+              "prometheusServerAddress": "0.0.0.0:8002",
+              "enabled": true
+            },
+            "host": "0.0.0.0",
+            "port": "8080"
+          }
+
+    - name: Run the Oracle Sidecar
+      shell: |
+        cd ~/slinky
+        ./build/slinky --oracle-config-path ./config/core/oracle.json --market-map-endpoint 0.0.0.0:9090
+
+    - name: Enable Oracle Vote Extension in app.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/app.toml"
+        regexp: '^#?enabled *=.*'
+        line: 'enabled = "true"'
+
+    - name: Set Oracle Address in app.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/app.toml"
+        regexp: '^#?oracle_address *=.*'
+        line: 'oracle_address = "127.0.0.1:8080"'
+
+    - name: Set Client Timeout in app.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/app.toml"
+        regexp: '^#?client_timeout *=.*'
+        line: 'client_timeout = "500ms"'
+
+    - name: Enable Oracle Metrics in app.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/app.toml"
+        regexp: '^#?metrics_enabled *=.*'
+        line: 'metrics_enabled = "false"'

@@ -1,0 +1,204 @@
+---
+- name: Install Initia Node and Dependencies
+  hosts: all
+  become: true
+  vars_prompt:
+    - name: moniker
+      prompt: "输入您的节点名称，不要用中文，可以是英文和下划线，如：BIGGANG_NODE"
+      private: no
+    - name: snapshot_block
+      prompt: "输入快照的高度，如果不懂，请私信大刚"
+      private: no
+  vars:
+    p2p_port: 26656
+    rpc_port: 26657
+    grpc_port: 9090
+  tasks:
+    - name: Update and Upgrade APT Packages
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: yes
+
+    - name: Install Dependencies
+      ansible.builtin.apt:
+        name:
+          - git
+          - build-essential
+          - curl
+          - jq
+          - lz4
+        state: present
+
+    - name: Download Go archive
+      ansible.builtin.get_url:
+        url: "https://golang.org/dl/go1.22.3.linux-amd64.tar.gz"
+        dest: "/tmp/go1.22.3.linux-amd64.tar.gz"
+        mode: '0644'
+
+    - name: Extract Go archive
+      ansible.builtin.unarchive:
+        src: "/tmp/go1.22.3.linux-amd64.tar.gz"
+        dest: "/usr/local"
+        remote_src: yes
+
+    - name: Ensure Go is in PATH
+      ansible.builtin.lineinfile:
+        path: ~/.profile
+        regexp: '^export PATH=.*\/usr\/local\/go\/bin.*$'
+        line: 'export PATH=$PATH:/usr/local/go/bin'
+        state: present
+
+    - name: Source profile
+      ansible.builtin.shell: "source ~/.profile"
+      args:
+        executable: /bin/bash
+
+    - name: Set file limits in /etc/security/limits.conf
+      lineinfile:
+        path: /etc/security/limits.conf
+        line: "* soft nofile 65535\n* hard nofile 65535"
+        create: yes
+        state: present
+
+    - name: Clean Go mod cache
+      shell: go clean -modcache
+
+    - name: Clone Initia Repository and Build
+      git:
+        repo: "https://github.com/initia-labs/initia.git"
+        dest: "~/initia"
+        version: "v0.2.15"
+        force: yes
+
+    - name: Remove previously installed Go versions
+      shell: rm -rf /usr/local/go
+
+    - name: Reinstall Go
+      ansible.builtin.unarchive:
+        src: "https://golang.org/dl/go1.22.3.linux-amd64.tar.gz"
+        dest: "/usr/local"
+        remote_src: yes
+
+    - name: Build Initia
+      ansible.builtin.shell:
+        cmd: "make install"
+        chdir: "~/initia"
+      environment:
+        PATH: "/usr/local/go/bin:{{ ansible_env.PATH }}"
+        GOPATH: "{{ ansible_env.HOME }}/go"
+        GOMODCACHE: "{{ ansible_env.HOME }}/go/pkg/mod"
+
+    - name: Move initiad to /usr/local/bin
+      ansible.builtin.copy:
+        src: "~/go/bin/initiad"
+        dest: "/usr/local/bin/initiad"
+        mode: '0755'
+
+    - name: Initialize Initia Node
+      shell: initiad init {{ moniker }} --chain-id initiation-1
+
+    - name: Download Genesis File
+      shell: |
+        wget https://initia.s3.ap-southeast-1.amazonaws.com/initiation-1/genesis.json -O ~/.initia/config/genesis.json
+
+    - name: Configure seeds in config.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/config.toml"
+        regexp: '^\s*seeds =.*'
+        line: 'seeds = "2eaa272622d1ba6796100ab39f58c75d458b9dbc@34.142.181.82:26656,c28827cb96c14c905b127b92065a3fb4cd77d7f6@testnet-seeds.whispernode.com:25756"'
+
+    - name: Configure persistent_peers in config.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/config.toml"
+        regexp: '^\\s*persistent_peers =.*'
+        line: 'persistent_peers = "093e1b89a498b6a8760ad2188fbda30a05e4f300@35.240.207.217:26656,2c729d33d22d8cdae6658bed97b3097241ca586c@195.14.6.129:26019"'
+
+    - name: Configure minimum gas prices in app.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/app.toml"
+        regexp: '^minimum-gas-prices *=.*'
+        line: 'minimum-gas-prices = "0.15uinit,0.01uusdc"'
+
+    - name: Get external IP
+      shell: curl -s httpbin.org/ip | jq -r .origin
+      register: external_ip
+
+
+    - name: Set external address in config.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/config.toml"
+        regexp: '^external_address =.*'
+        line: 'external_address = "{{ external_ip.stdout }}:26656"'
+
+    - name: Download addrbook.json
+      shell: |
+        wget https://initia.s3.ap-southeast-1.amazonaws.com/initiation-1/addrbook.json -O ~/.initia/config/addrbook.json
+
+
+    - name: Clear Initia data directory
+      file:
+        path: "{{ ansible_env.HOME }}/.initia/data"
+        state: absent
+
+    - name: Create Initia data directory
+      file:
+        path: "{{ ansible_env.HOME }}/.initia/data"
+        state: directory
+
+    - name: Download the snapshot with curl and show progress
+      command:
+        cmd: "curl -L https://snapshots.polkachu.com/testnet-snapshots/initia/initia_{{ snapshot_block }}.tar.lz4 -o {{ ansible_env.HOME }}/.initia/initia_snapshot.tar.lz4 --progress-bar"
+      args:
+        executable: /bin/bash
+      register: curl_result
+      failed_when: curl_result.rc != 0
+
+    - name: Extract the snapshot
+      shell: "lz4 -d {{ ansible_env.HOME }}/.initia/initia_snapshot.tar.lz4 | tar x -C {{ ansible_env.HOME }}/.initia"
+      args:
+        executable: /bin/bash
+
+    - name: Configure pruning in app.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/app.toml"
+        regexp: '^pruning *=.*'
+        line: 'pruning = "custom"'
+      register: pruning_config
+
+    - name: Configure pruning-keep-recent in app.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/app.toml"
+        regexp: '^pruning-keep-recent *=.*'
+        line: 'pruning-keep-recent = "100"'
+      when: pruning_config.changed
+
+    - name: Configure pruning-interval in app.toml
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.initia/config/app.toml"
+        regexp: '^pruning-interval *=.*'
+        line: 'pruning-interval = "10"'
+      when: pruning_config.changed
+
+    - name: Install Cosmovisor
+      shell: go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@latest
+
+    - name: Setup Cosmovisor
+      shell: |
+        export DAEMON_HOME=~/.initia
+        export DAEMON_NAME=initiad
+        cosmovisor init /usr/local/bin/initiad
+        mkdir -p $DAEMON_HOME/cosmovisor/genesis/bin
+        mkdir -p $DAEMON_HOME/cosmovisor/upgrades
+        cp /usr/local/bin/initiad $DAEMON_HOME/cosmovisor/genesis/bin/
+
+    - name: Setup Initia Node Systemd Service
+      template:
+        src: initia-node.service.j2
+        dest: /etc/systemd/system/initia-node.service
+
+    - name: Enable and Start Initia Service
+      systemd:
+        name: initia-node.service
+        enabled: yes
+        state: started
+        daemon_reload: yes
