@@ -61,39 +61,34 @@ Enter the node name: mynode
 Enter the block height of the polkachu snapshot: 1234567
 ```
 
-## Step 4: Viewing Node Logs
-To view the logs for the Initia node:
+## Step 4: 查看日志
 
 ```
 journalctl -u initia-node -f -o cat
 ```
 To exit the logs, type Ctrl+C.
 
-## Step 5: Creating an Initia Wallet
-After installing the node, create an Initia wallet essential for network operations:
+## Step 5: 创建 Initia钱包
 
 ```
 ansible-playbook create_initia_wallet.yml
 ```
 Once completed, you will obtain the address of the Initia wallet. Save it for requesting testnet funds and further operations.
 
-## Step 6: Requesting Initia Testnet Funds
-To request testing funds on the Initia network, check the #faucet-verification channel on the Initia Discord. Then, go to the Initia faucet website and claim test tokens by typing your wallet number.
+## Step 6: 领取水龙头代币
 
-Note: Due to high demand, you may need to wait 20 minutes for the tap role to be checked. You can only claim 30 INIT once every 24 hours.
+领取教程参看我的YT
 
-## Step 7: Checking Node Synchronization
-To ensure your node is fully synchronized with the Initia blockchain:
+
+## Step 7: 检查节点同步到最新，必须要等几个小时才能同步到最新，只有同步到最新时，才继续下面的操作、
 
 ```
 initiad status | jq
 ```
 
-Synchronization takes several hours. Once the catching_up variable is false, your node is fully synchronized and ready for further operations.
 
-## Step 8: Registering the Initia Node as a Validator
-Finalize your node configuration by registering your node as a validator and linking it to your Initia wallet. Ensure your node is synchronized with the blockchain and you hold Initia tokens in your wallet. Then, run this command:
-
+## Step 8: 注册验证器
+使用你的钱包地址进行注册
 
 ```
 ansible-playbook register_initia_node.yml
@@ -104,48 +99,36 @@ Moniker: "node_name"
 Details: "a phrase of your choice"
 Website: "your website"
 
-## Step 9: Viewing Validator State
-You can check the status of your validator by executing:
+## Step 9: 查看验证器状态
 
 ```
-initiad query mstaking validator <validator_address>
+initiad query mstaking validator <你的验证器地址>
 ```
-Replace <validator_address> with your validator's wallet address provided at the end of the playbook execution.
 
-## Step 10: Setting Up the Oracle
-To set up the Oracle for Initia, execute the following playbook:
+## Step 10: 设置Oracle
 
 ```
 ansible-playbook setup_oracle.yml
 ```
-This will configure and run the Oracle sidecar, enabling essential components for the Oracle and Market functionalities.
 
-## Additional Information
-Stopping the Service
+## 额外的命令
+停止服务
 To stop the Initia node:
 ```
 sudo systemctl stop initia-node
 ```
 
-Starting the Service
+开启服务
 To start the Initia node:
 ```
 sudo systemctl start initia-node
 ```
 
-Removing the Initia Node
-To remove the Initia node, run the playbook for removal:
+移除节点
 ```
 ansible-playbook remove_node_initia.yml
 ```
-Ensure to back up any important data before removing the node, as this action may delete node data.
 
-Conclusion
-That's it! You have successfully deployed an Initia node, thus contributing to the robustness of the network and earning potential rewards. Join the Initia community on Discord and Twitter to stay informed about the project.
-
-Thank you for taking the time to read this guide. If you have any questions or would like to continue the conversation, feel free to join the Initia community on Discord.
-
-Stay updated and connected: Follow us on Twitter, join our Telegram group, Discord server, and subscribe to our YouTube channel.
 
 
 
